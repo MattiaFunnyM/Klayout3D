@@ -4,43 +4,6 @@ from matplotlib.path import Path
 from scipy.spatial import Delaunay
 from matplotlib.collections import LineCollection
 
-def project_points_from_3D_to_2D(points: list = []) -> list:
-    """
-    Project a list of 3D points onto a local 2D plane defined by the first 3 points.
-
-
-    Parameters:
-        points (list): list of 3D points [x, y, z]. Must contain at least 3 non-collinear points.
-
-    Returns:
-        points_2d (np.ndarray): list of 2D points [u, v] projected onto the local plane.
-    """
-
-    points = np.array(points)
-
-    # 1. Define the plane origin as the first point
-    plane_origin = points[0]
-
-    # 2. First local axis (u): direction from origin to second point, normalized
-    u_axis = points[1] - plane_origin
-    u_axis = u_axis / np.linalg.norm(u_axis)
-
-    # 3. Compute the plane normal via cross product of two edges
-    plane_normal = np.cross(u_axis, points[2] - plane_origin)
-    plane_normal = plane_normal / np.linalg.norm(plane_normal)
-
-    # 4. Second local axis (v): perpendicular to both u_axis and plane_normal
-    v_axis = np.cross(plane_normal, u_axis)
-
-    # 5. Project each 3D point onto the local (u, v) 2D plane
-    points_2d = np.array([
-        [np.dot(point - plane_origin, u_axis),
-         np.dot(point - plane_origin, v_axis)]
-        for point in points
-    ])
-
-    return points_2d
-
 def simplify_point(points: list = [], tolerance: float = 0.0, tolerance_col: float = 0.0) -> list:
     """
     Simplifies the points list in input such that two consecutive points
@@ -48,7 +11,7 @@ def simplify_point(points: list = [], tolerance: float = 0.0, tolerance_col: flo
     Simplifies also if three consecutive points are collinear.
     
     Parameters:
-        points (list): ordered list of (x, y) or (x, y, z) coordinates representing the vertices of a closed polygon.
+        points (list): ordered list of (x, y) coordinates representing the vertices of a closed polygon.
         tolerance (float): minimum x or y distance between consecutive points to consider them distinct.
         tolerance_col (float): minimum tolerance for the cross product to consider points as non-collinear.
     """
@@ -78,32 +41,21 @@ def simplify_point(points: list = [], tolerance: float = 0.0, tolerance_col: flo
             continue
             
         # Check for collinearity by cross product
-        ax = curr_pt[0] - last_kept[0]
-        ay = curr_pt[1] - last_kept[1]
-        az = curr_pt[2] - last_kept[2] if len(curr_pt) > 2 else 0.0
-
-        bx = next_pt[0] - last_kept[0]
-        by = next_pt[1] - last_kept[1]
-        bz = next_pt[2] - last_kept[2] if len(next_pt) > 2 else 0.0
-
-        cross_product = np.sqrt(
-            (ay * bz - az * by) ** 2 +
-            (az * bx - ax * bz) ** 2 +
-            (ax * by - ay * bx) ** 2
-        )
-
-        # Add point only if cross product is large enough
+        cross_product = abs((curr_pt[0] - last_kept[0]) * (next_pt[1] - last_kept[1]) - 
+                            (curr_pt[1] - last_kept[1]) * (next_pt[0] - last_kept[0]))
+        
+        # If cross_product is small, curr_pt adds no new 'shape' info
         if cross_product > tolerance_col:
             simplified.append(curr_pt)
             
-    return np.array(simplified)
+    return simplified
 
 def triangulate_polygon(points: list = [], tolerance: float = 0.0, tolerance_col: float = 0.0) -> tuple[list, list]:
     """
     Generate a list of array with 3 elements, each corresponding to a vertex of the triangle.
     
     Parameters:
-        points (list): ordered list of (x, y) or (x, y, z) coordinates representing the vertices of a closed polygon.
+        points (list): ordered list of (x, y) coordinates representing the vertices of a closed polygon.
             The polygon can be concave and can contain holes. 
         tolerance (float): minimum tolerance between points to consider distinct.
         tolerance_col (float): minimum tolerance for the cross product to consider points as non-collinear.
@@ -112,7 +64,6 @@ def triangulate_polygon(points: list = [], tolerance: float = 0.0, tolerance_col
             points (list): Simplified list of points after applying the tolerance.
             triangle_points (list): Array of triangles indexes. Each element is formed by 3 integers.
     """
-
     # 0. Preliminary checks
     if len(points) < 3:
         raise ValueError("At least 3 points are required to form a polygon.")
@@ -122,18 +73,15 @@ def triangulate_polygon(points: list = [], tolerance: float = 0.0, tolerance_col
                             tolerance = tolerance,
                             tolerance_col = tolerance_col)
     
-    # 2. Project the point to 2D if they are in 3D
-    if len(points[0]) == 3:
-        points_projected = project_points_from_3D_to_2D(points=points)
-    else:
-        points_projected = points
+    # 2. Take only x and y coordinates if more are provided
+    points_2D = np.array(points)[:, :2]
 
     # 3. Use Delaunay triangulation method
-    triangle_indexes = Delaunay(points_projected).simplices
+    triangle_indexes = Delaunay(points_2D).simplices
 
     # 4. Remove triangles outside the concave boundary
-    centroids = np.mean(points_projected[triangle_indexes], axis=1)
-    polygon_path = Path(points_projected)
+    centroids = np.mean(points_2D[triangle_indexes], axis=1)
+    polygon_path = Path(points_2D)
     inside_mask = polygon_path.contains_points(centroids)
     triangle_indexes = triangle_indexes[inside_mask].tolist()
 

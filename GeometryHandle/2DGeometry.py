@@ -118,8 +118,8 @@ if __name__ == '__main__':
     t_o = np.linspace(0, 2 * np.pi, 50, endpoint=False)
     outer = np.column_stack([np.cos(t_o), np.sin(t_o)])
     inner = np.column_stack([0.5 * np.cos(t_o[::-1]), 0.5 * np.sin(t_o[::-1])])
-    letter_o_points = np.vstack([outer, outer[0], inner, inner[0], outer[0]]).tolist()
-        
+    letter_o_points = np.vstack([outer, outer[0], inner, inner[0]]).tolist()
+      
     # ==========================================
     # TESTING
     # ==========================================
@@ -137,8 +137,7 @@ if __name__ == '__main__':
     letter_o_points, letter_o_indexes = triangulate_polygon(points=letter_o_points, 
                                                             tolerance=tolerance,
                                                             tolerance_col=tolerance_col)
-    #n = len(letter_o_points)
-    #letter_o_indexes.append([n-1, 0, n-2])
+    
     # ==========================================
     # PLOTTING
     # ==========================================
@@ -147,10 +146,6 @@ if __name__ == '__main__':
     fig.suptitle('Polygon Triangulation', fontsize=16)
     
     def plot_triangulation(ax, points, triangles, title, cmap_name='plasma'):
-        """
-        Plots triangulation with a temporal gradient.
-        Edges are colored based on the average index of their vertices.
-        """
         points = np.asarray(points)
         triangles = np.asarray(triangles)
         n_points = len(points)
@@ -158,15 +153,16 @@ if __name__ == '__main__':
         # 1. Initialize Colormap
         cmap = plt.get_cmap(cmap_name)
 
-        # 2. Extract unique edges and calculate their "time" (average index)
-        # We use a set to ensure we don't draw the same edge twice
+        # 2. Extract unique edges and calculate their average index
         edge_map = {}
         for tri in triangles:
             for i in range(3):
                 p1_idx, p2_idx = tri[i], tri[(i+1)%3]
+                
                 # Key is sorted tuple to treat (1,0) and (0,1) as the same edge
                 edge_key = tuple(sorted((p1_idx, p2_idx)))
                 if edge_key not in edge_map:
+                    
                     # Store the average position in the sequence
                     edge_map[edge_key] = (p1_idx + p2_idx) / 2.0
 
@@ -175,6 +171,7 @@ if __name__ == '__main__':
         colors = []
         for (p1_idx, p2_idx), avg_idx in edge_map.items():
             lines.append([points[p1_idx], points[p2_idx]])
+            
             # Normalize the index to [0.0, 1.0] for the colormap
             colors.append(cmap(avg_idx / (n_points - 1)))
 
@@ -182,7 +179,6 @@ if __name__ == '__main__':
         ax.add_collection(line_coll)
 
         # 4. Plot points with the same gradient
-        # point_indices normalized from 0 to 1
         point_colors = cmap(np.linspace(0, 1, n_points))
         ax.scatter(points[:, 0], points[:, 1], c=point_colors, s=25, 
                 zorder=3, edgecolors='black', linewidths=0.3)
@@ -190,7 +186,6 @@ if __name__ == '__main__':
         # 5. UI Formatting
         ax.set_title(title)
         ax.set_aspect('equal')
-        # Manually update limits since LineCollection doesn't trigger autoscaling
         if n_points > 0:
             ax.set_xlim(points[:, 0].min() - 0.1, points[:, 0].max() + 0.1)
             ax.set_ylim(points[:, 1].min() - 0.1, points[:, 1].max() + 0.1)

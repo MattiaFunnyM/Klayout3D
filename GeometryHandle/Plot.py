@@ -130,14 +130,21 @@ def plot_data(polygons: list = []):
 
     central_widget = QWidget()
     window.setCentralWidget(central_widget)
-    main_layout = QVBoxLayout(central_widget)
-    main_layout.setContentsMargins(10, 10, 10, 10)
-    main_layout.setSpacing(8)
+
+    # Outer layout: 3D view on the left, legend on the right
+    outer_layout = QHBoxLayout(central_widget)
+    outer_layout.setContentsMargins(10, 10, 10, 10)
+    outer_layout.setSpacing(8)
+
+    # Left side: plotter + slider + save button stacked vertically
+    left_layout = QVBoxLayout()
+    left_layout.setSpacing(8)
+    outer_layout.addLayout(left_layout, stretch=1)
 
     # Initialization of the PyVista Qt Interactor
     plotter = QtInteractor(central_widget)
     plotter.set_background("#1e1e2e")
-    main_layout.addWidget(plotter.interactor, stretch=1)
+    left_layout.addWidget(plotter.interactor, stretch=1)
 
     # Creation of the Slider Panel
     panel = QFrame()
@@ -212,7 +219,76 @@ def plot_data(polygons: list = []):
         }
     """)
     panel_layout.addWidget(save_button)
-    main_layout.addWidget(panel)
+    left_layout.addWidget(panel)
+
+    ####################
+    # LEGEND PANEL     #
+    ####################
+
+    # Collect the layers that are actually present in the polygons
+    present_layer_keys = set()
+    for polygon in polygons:
+        layer_key = f"{polygon['layer']['layer']}/{polygon['layer']['datatype']}"
+        if layer_key in tech_layers:
+            present_layer_keys.add(layer_key)
+
+    # Outer legend frame
+    legend_frame = QFrame()
+    legend_frame.setFixedWidth(200)
+    legend_frame.setStyleSheet("""
+        QFrame {
+            background-color: #2a2a3e;
+            border-radius: 10px;
+        }
+    """)
+    legend_layout = QVBoxLayout(legend_frame)
+    legend_layout.setContentsMargins(12, 12, 12, 12)
+    legend_layout.setSpacing(8)
+
+    # Legend title
+    legend_title = QLabel("Layers")
+    legend_title.setFont(QFont("Segoe UI", 10, QFont.Bold))
+    legend_title.setStyleSheet("color: #cdd6f4;")
+    legend_title.setAlignment(Qt.AlignCenter)
+    legend_layout.addWidget(legend_title)
+
+    # Separator line
+    separator = QFrame()
+    separator.setFrameShape(QFrame.HLine)
+    separator.setStyleSheet("color: #45475a;")
+    legend_layout.addWidget(separator)
+
+    # One row per layer present in the scene
+    for layer_key in sorted(present_layer_keys):
+        info = tech_layers[layer_key]
+        name = info.get("name", layer_key)
+        r, g, b = [int(c * 255) for c in info["color"]]
+        alpha = info["alpha"]
+
+        row = QHBoxLayout()
+        row.setSpacing(8)
+
+        # Color swatch: a small colored square matching the layer color and opacity
+        swatch = QLabel()
+        swatch.setFixedSize(16, 16)
+        swatch.setStyleSheet(f"""
+            background-color: rgba({r}, {g}, {b}, {int(alpha * 255)});
+            border: 1px solid #45475a;
+            border-radius: 3px;
+        """)
+        row.addWidget(swatch)
+
+        # Layer name label
+        name_label = QLabel(name)
+        name_label.setFont(QFont("Segoe UI", 9))
+        name_label.setStyleSheet("color: #cdd6f4;")
+        row.addWidget(name_label, stretch=1)
+
+        legend_layout.addLayout(row)
+
+    # Push all entries to the top
+    legend_layout.addStretch()
+    outer_layout.addWidget(legend_frame)
 
     ########################
     # DRAW POLYGONS PART   #

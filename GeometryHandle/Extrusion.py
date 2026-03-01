@@ -7,7 +7,7 @@ try:
 except ModuleNotFoundError:
     import Triangulation as tri
 
-def extrude_polygon_points(points: list = [], height: float = 0.0, z_position: float = 0.0, tolerance: float = 0.01, tolerance_col: float = 0.001):
+def extrude_polygon_points(points: list = [], height: float = 0.0, z_position: float = 0.0, tolerance: float = 0.01, max_distance: float = None):
     """
     Generate 3 list of array representing the vertices of the bottom, top and lateral surface.
     
@@ -17,7 +17,8 @@ def extrude_polygon_points(points: list = [], height: float = 0.0, z_position: f
         height (float): extrusion height along the z-axis.
         z_position (float): starting z coordinate of the extrusion.
         tolerance (float): minimum x or y distance between consecutive points to consider them distinct.
-        tolerance_col (float): minimum tolerance for the cross product to consider points as non-collinear.
+        max_distance (float): maximum allowed distance between two consecutive points.
+                              If None, no densification is performed.
 
     Returns:
         bottom_points (list): List of (x, y, z) points at z_position.
@@ -33,14 +34,12 @@ def extrude_polygon_points(points: list = [], height: float = 0.0, z_position: f
     bottom_points = [[x, y, z_position] for (x, y) in points]
     bottom_points, bottom_triangle_indexes = tri.triangulate_polygon(points=bottom_points, 
                                                                      tolerance=tolerance,
-                                                                     tolerance_col=tolerance_col)
+                                                                     max_distance=max_distance)
     bottom = [bottom_points, bottom_triangle_indexes]
     
     # 2. Generate top surface
-    top_points = [[x, y, z_position + height] for (x, y) in points]
-    top_points, top_triangle_indexes = tri.triangulate_polygon(points=top_points, 
-                                                               tolerance=tolerance,
-                                                               tolerance_col=tolerance_col)
+    top_points = [[x, y, z + height] for (x, y, z) in bottom_points]
+    top_triangle_indexes = bottom_triangle_indexes
     top = [top_points, top_triangle_indexes]
 
     # 3. Generate lateral 

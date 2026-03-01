@@ -4,53 +4,60 @@ from matplotlib.path import Path
 from scipy.spatial import Delaunay
 from matplotlib.collections import LineCollection
 
-def simplify_point(points: list = [], tolerance: float = 0.0, tolerance_col: float = 0.0) -> list:
+def simplify_point(points: list = [], tolerance: float = 0.0, max_distance: float = None) -> list:
     """
     Simplifies the points list in input such that two consecutive points
     have a distance in both x and y direction greater than the tolerance.
-    Simplifies also if three consecutive points are collinear.
-    
+    Densifies the result by inserting midpoints between consecutive
+    points that are farther apart than max_distance.
+
     Parameters:
         points (list): ordered list of (x, y) coordinates representing the vertices of a closed polygon.
         tolerance (float): minimum x or y distance between consecutive points to consider them distinct.
-        tolerance_col (float): minimum tolerance for the cross product to consider points as non-collinear.
+        max_distance (float): maximum allowed distance between two consecutive points.
+                              If None, no densification is performed.
     """
     # 0. Preliminary checks
     if tolerance < 0:
         raise ValueError("Tolerance must be non-negative.")
-    
+
     # If there are less than 3 points we cannot simplify it.
     if len(points) < 3:
         return points
-    
-    # Initialize needed variables
-    pts = np.array(points)
-    simplified = [pts[0]]
-    
-    # Start the loop
-    for i in range(1, len(pts)):
 
-        # Keep the points to be tested
-        last_kept = simplified[-1]
-        curr_pt = pts[i]
-        next_pt = pts[(i + 1) % len(pts)]
-        
-        # Check the distance
-        dist = np.max(np.abs(curr_pt - last_kept))
-        if dist < tolerance:
-            continue
-            
-        # Check for collinearity by cross product
-        cross_product = abs((curr_pt[0] - last_kept[0]) * (next_pt[1] - last_kept[1]) - 
-                            (curr_pt[1] - last_kept[1]) * (next_pt[0] - last_kept[0]))
-        
-        # If cross_product is small, curr_pt adds no new 'shape' info
-        if cross_product > tolerance_col:
-            simplified.append(curr_pt)
-            
+    # Convert to numpy array for consistent arithmetic across all operations
+    pts = np.array(points)
+
+    # 1. Simplification: remove points that are too close to the previous kept point
+    simplified = [pts[0]]
+    for i in range(1, len(pts)):
+        dist = np.max(np.abs(pts[i] - simplified[-1]))
+        if dist >= tolerance:
+            simplified.append(pts[i])
+
+    # 2. Densification: insert midpoints between consecutive points that are too far apart
+    if max_distance is not None:
+        densified = [simplified[0]]
+        for i in range(1, len(simplified)):
+            prev_pt = simplified[i - 1]
+            curr_pt = simplified[i]
+
+            # Compute the Euclidean distance between the two consecutive points
+            segment_length = np.linalg.norm(curr_pt - prev_pt)
+
+            if segment_length > max_distance:
+                # Number of segments needed to respect max_distance
+                n_splits = int(np.ceil(segment_length / max_distance))
+                for k in range(1, n_splits):
+                    intermediate_pt = prev_pt + k / n_splits * (curr_pt - prev_pt)
+                    densified.append(intermediate_pt)
+
+            densified.append(curr_pt)
+        return densified
+
     return simplified
 
-def triangulate_polygon(points: list = [], tolerance: float = 0.0, tolerance_col: float = 0.0) -> tuple[list, list]:
+def triangulate_polygon(points: list = [], tolerance: float = 0.0, max_distance: float = None) -> tuple[list, list]:
     """
     Generate a list of array with 3 elements, each corresponding to a vertex of the triangle.
     
@@ -58,7 +65,8 @@ def triangulate_polygon(points: list = [], tolerance: float = 0.0, tolerance_col
         points (list): ordered list of (x, y) coordinates representing the vertices of a closed polygon.
             The polygon can be concave and can contain holes. 
         tolerance (float): minimum tolerance between points to consider distinct.
-        tolerance_col (float): minimum tolerance for the cross product to consider points as non-collinear.
+        max_distance (float): maximum allowed distance between two consecutive points.
+                        If None, no densification is performed.
     
     Returns:
             points (list): Simplified list of points after applying the tolerance.
@@ -71,7 +79,7 @@ def triangulate_polygon(points: list = [], tolerance: float = 0.0, tolerance_col
     # 1. Simplify data
     points = simplify_point(points = points, 
                             tolerance = tolerance,
-                            tolerance_col = tolerance_col)
+                            max_distance = max_distance)
     
     # 2. Take only x and y coordinates if more are provided
     points_2D = np.array(points)[:, :2]

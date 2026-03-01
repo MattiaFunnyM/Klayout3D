@@ -1,7 +1,22 @@
+import sys
 import json 
 import numpy as np
 import pyvista as pv
 import GeometryHandle.Extrusion as ext
+
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QFont
+from pyvistaqt import QtInteractor
+from PyQt5.QtWidgets import (
+    QApplication, 
+    QMainWindow, 
+    QVBoxLayout, 
+    QHBoxLayout, 
+    QWidget,
+    QSlider, 
+    QLabel, 
+    QFrame
+)
 
 # Open the Technology File
 with open("TechnologyExample.json", "r") as f:
@@ -10,69 +25,185 @@ with open("TechnologyExample.json", "r") as f:
 # Take the information of the colors
 tech_layers = tech["layers"]
 
-def plot_data(polygons):
+def polygons_extrusion_zoomed(actors: list = [], plotter: pv.plotter = None, polygons: list = [], z_zoom: float = 1.0):
     """
-    Plot the polygons data in input according to the settings.
-    """
-    
-    # Instantiate the plotter
-    plotter = pv.Plotter(window_size=(1200, 800))
+    Extrude the polygons based on the zoom and create a 3D scene with PyVista. 
 
-    # Initialize the legend
-    used_layers = {}
-    
-    # Check all the polygons in input
+    Parameters:
+        actors (list): List of PyVista actors to update with the new meshes. If empty, new actors will be created.
+        plotter (pv.plotter): The PyVista plotter instance to use for rendering.
+        polygons (list): A list of polygon data structures.
+        z_zoom (float): The zoom factor for the Z-axis.
+
+    Returns:
+        actors (list): A list of PyVista actors that were created or updated.
+    """
+
+    # Clear the previous plotter content
+    no_actors = len(actors) == 0
+    actor_idx = 0
+
+    # Loop all the polygons
     for polygon in polygons:
-  
-        layer_key = f"{ polygon['layer']['layer']}/{ polygon['layer']['datatype']}"
-
-        # If we don't have information of the layer skip it
+        
+        # Understand if the layer is known
+        layer_key = f"{polygon['layer']['layer']}/{polygon['layer']['datatype']}"
         if layer_key not in tech_layers:
             continue
         
-        # Get information of the polygon
+        # Get information from the technology file
         info = tech_layers[layer_key]
         alpha = info["alpha"]
         color = info["color"]
-        height = info["height"]
         polygon_points = polygon["points"]
         tolerance = tech["tolerance"]
         tolerance_col = tech["tolerance_col"]
-        z_position = info["z_position"]
 
-        # Extrude the polygon in 3D
-        bot, top, lat = ext.extrude_polygon_points(points=polygon_points, 
-                                                   height=height, 
-                                                   z_position=z_position,
-                                                   tolerance=tolerance,
-                                                   tolerance_col=tolerance_col)
-        
+        # Apply Z scaling
+        height = info["height"] * z_zoom
+        z_position = info["z_position"] * z_zoom
+
+        # Extrude the polygon based on the information collected
+        bot, top, lat = ext.extrude_polygon_points(
+            points=polygon_points,
+            height=height,
+            z_position=z_position,
+            tolerance=tolerance,
+            tolerance_col=tolerance_col
+        )
+
+        # Create the mesh for all the faces extruded
         for face in [bot, top, lat]:
             
-            # Convert points to numpy array
+            # Initialize the face
             points = np.array(face[0])
             triangles_indexes = face[1]
-
-            # Prepare faces array for PyVista
             faces = []
+
+            # Fill the face array
             for triangle_idx in triangles_indexes:
                 faces.extend([3, triangle_idx[0], triangle_idx[1], triangle_idx[2]])
             faces = np.array(faces)
+
+            # Add the mesh obtained
             mesh = pv.PolyData(points, faces)
-
-            # Add the mesh to the plotter
-            plotter.add_mesh(mesh, color=color, opacity=alpha, show_edges=False)
+          
             
-        # Save the layer
-        used_layers[layer_key] = info
+            if no_actors:
+                actor = plotter.add_mesh(mesh, color=color, opacity=alpha, show_edges=False)
+                actors.append(actor)
+            else:
+                actors[actor_idx].GetMapper().SetInputData(mesh)
+                actor_idx += 1
 
-    # Legend
-    legend_entries = []
-    for key, info in used_layers.items():
-        name = info.get("name", key)
-        legend_entries.append([name, info["color"]])
+    return actors
 
-    if legend_entries:
-        plotter.add_legend(legend_entries, bcolor="white")
+def plot_data(polygons: list = []):
+    """
+    Create a 3D plot of the polygons taken in input.
 
-    plotter.show()
+    Parameters:
+        polygons (list): A list of polygon data structures.
+    """
+    ####################
+    # PLOT WINDOW PART #
+    ####################
+
+    app = QApplication.instance() or QApplication(sys.argv)
+
+    # Initialization of the Main Window 
+    window = QMainWindow()
+    window.setWindowTitle("3D Layer Viewer")
+    window.resize(1200, 700)
+    window.setStyleSheet("background-color: #1e1e2e;")
+
+    central_widget = QWidget()
+    window.setCentralWidget(central_widget)
+    main_layout = QVBoxLayout(central_widget)
+    main_layout.setContentsMargins(10, 10, 10, 10)
+    main_layout.setSpacing(8)
+
+    # Initialization of the PyVista Qt Interactor
+    plotter = QtInteractor(central_widget)
+    plotter.set_background("#1e1e2e")
+    main_layout.addWidget(plotter.interactor, stretch=1)
+
+    # Creation of the Slider Panel ---
+    panel = QFrame()
+    panel.setStyleSheet("""
+        QFrame {
+            background-color: #2a2a3e;
+            border-radius: 10px;
+            padding: 4px;
+        }
+    """)
+    panel_layout = QHBoxLayout(panel)
+    panel_layout.setContentsMargins(16, 8, 16, 8)
+
+    # Label of the panel
+    title_label = QLabel("Z Multiplier")
+    title_label.setFont(QFont("Segoe UI", 10, QFont.Bold))
+    title_label.setStyleSheet("color: #cdd6f4;")
+    panel_layout.addWidget(title_label)
+
+    # Slider
+    slider = QSlider(Qt.Horizontal)
+    slider.setMinimum(25)   
+    slider.setMaximum(1000)  
+    slider.setValue(100)    
+    slider.setTickInterval(25)
+    slider.setTickPosition(QSlider.TicksBelow)
+    slider.setStyleSheet("""
+        QSlider::groove:horizontal {
+            height: 6px;
+            background: #45475a;
+            border-radius: 3px;
+        }
+        QSlider::handle:horizontal {
+            background: #89b4fa;
+            border: 2px solid #1e1e2e;
+            width: 18px;
+            height: 18px;
+            margin: -7px 0;
+            border-radius: 9px;
+        }
+        QSlider::sub-page:horizontal {
+            background: #89b4fa;
+            border-radius: 3px;
+        }
+    """)
+    panel_layout.addWidget(slider, stretch=1)
+
+    # Value display
+    value_label = QLabel("1.00×")
+    value_label.setFont(QFont("Segoe UI", 10))
+    value_label.setStyleSheet("color: #89b4fa; min-width: 48px;")
+    value_label.setAlignment(Qt.AlignCenter)
+    panel_layout.addWidget(value_label)
+
+    main_layout.addWidget(panel)
+
+    ####################
+    # DRAW POLYGONS PART #
+    ####################
+    actors = []
+
+    def on_slider_change(raw_value):
+        nonlocal actors
+        z_zoom = raw_value / 100.0
+        value_label.setText(f"{z_zoom:.2f}×")
+        actors = polygons_extrusion_zoomed(
+            actors=actors,
+            plotter=plotter,
+            polygons=polygons,
+            z_zoom=z_zoom
+        )
+        plotter.render()
+
+    slider.valueChanged.connect(on_slider_change)
+
+    # Initial render
+    on_slider_change(100)
+
+    window.show()
+    sys.exit(app.exec_())

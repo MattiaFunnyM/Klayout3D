@@ -193,7 +193,7 @@ def plot_data(polygons: list = []):
     panel_layout.addWidget(value_label)
 
     # Save button
-    save_button = QPushButton("⬇ Export GLB")
+    save_button = QPushButton("⬇ Export PLY")
     save_button.setFont(QFont("Segoe UI", 10))
     save_button.setStyleSheet("""
         QPushButton {
@@ -212,7 +212,6 @@ def plot_data(polygons: list = []):
         }
     """)
     panel_layout.addWidget(save_button)
-
     main_layout.addWidget(panel)
 
     ########################
@@ -234,55 +233,26 @@ def plot_data(polygons: list = []):
 
     def on_save():
         """
-        Open a file dialog and export the current 3D scene as a GLB file.
-        GLB is the binary variant of GLTF, widely supported by Blender and
-        other 3D tools. Each actor is exported as a separate mesh preserving
-        colors and geometry.
+        Open a file dialog and export the current 3D scene as a PLY file.
+        PLY is natively supported by Blender via File -> Import -> PLY.
+        All meshes are merged into a single PLY file.
         """
-        # Open a save dialog filtered to GLB files
         file_path, _ = QFileDialog.getSaveFileName(
             window,
             "Export 3D Scene",
-            "scene.glb",
-            "GLTF Binary (*.glb);;All Files (*)"
+            "scene.ply",
+            "Stanford PLY (*.ply);;All Files (*)"
         )
         if not file_path:
-            # User cancelled the dialog
             return
 
-        # Collect all meshes from active actors and convert to trimesh geometries
-        scene = trimesh.Scene()
-        for idx, actor in enumerate(actors):
-            vtk_mesh = actor.GetMapper().GetInput()
-            if vtk_mesh is None:
-                continue
-
-            # Extract vertices and faces from the VTK mesh
-            wrapped = pv.wrap(vtk_mesh)
-            vertices = np.array(wrapped.points)
-            faces = wrapped.faces.reshape(-1, 4)[:, 1:]  # drop the leading face-size column
-
-            # Recover the actor color and opacity
-            vtk_property = actor.GetProperty()
-            r, g, b = vtk_property.GetColor()
-            alpha = vtk_property.GetOpacity()
-            rgba = [int(r * 255), int(g * 255), int(b * 255), int(alpha * 255)]
-
-            # Build the trimesh object with its material color
-            mesh = trimesh.Trimesh(
-                vertices=vertices,
-                faces=faces,
-                process=False
-            )
-            mesh.visual = trimesh.visual.ColorVisuals(
-                mesh=mesh,
-                vertex_colors=rgba
-            )
-
-            scene.add_geometry(mesh, node_name=f"layer_{idx}")
-
-        # Export the full scene as GLB
-        scene.export(file_path)
+        # Merge all actor meshes into a single PolyData and save as PLY
+        combined = pv.PolyData()
+        for actor in actors:
+            mesh = actor.GetMapper().GetInput()
+            if mesh is not None:
+                combined = combined.merge(pv.wrap(mesh))
+        combined.save(file_path)
 
     slider.valueChanged.connect(on_slider_change)
     save_button.clicked.connect(on_save)
@@ -291,4 +261,4 @@ def plot_data(polygons: list = []):
     on_slider_change(100)
 
     window.show()
-    sys.exit(app.exec_())
+    app.exec_()

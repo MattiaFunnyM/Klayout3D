@@ -1,13 +1,17 @@
 import sys
 import json
-import GeometryHandle.Plot as Plot
 import socket
 import threading
+import GeometryHandle.Plot as Plot
 
 # -----------------------------
 # Helper functions
 # -----------------------------
 def keyboard_listener():
+    """
+    Listen for keyboard input in a separate thread.
+    Allows the user to stop the server by typing 'quit'.
+    """
     global running
     print("Press 'quit' + Enter to stop the server.")
     for line in sys.stdin:
@@ -16,7 +20,21 @@ def keyboard_listener():
             running = False
             break
 
+
 def recv_exact(conn, n):
+    """
+    Receive exactly n bytes from a socket connection.
+
+    Parameters:
+        conn (socket): The socket connection to read from.
+        n (int): The exact number of bytes to read.
+
+    Returns:
+        data (bytes): The received bytes.
+
+    Raises:
+        ConnectionError: If the connection is closed before n bytes are received.
+    """
     data = b""
     while len(data) < n:
         chunk = conn.recv(n - len(data))
@@ -24,6 +42,19 @@ def recv_exact(conn, n):
             raise ConnectionError("Connection closed before receiving full message")
         data += chunk
     return data
+
+
+def handle_plot(polygons):
+    """
+    Run plot_data in a dedicated thread so the server loop stays alive
+    while the 3D window is open. Using a thread also prevents the Qt
+    window from blocking the server from accepting new connections.
+
+    Parameters:
+        polygons (list): A list of polygon data structures to plot.
+    """
+    Plot.plot_data(polygons)
+
 
 # -----------------------------
 # Server setup
@@ -48,11 +79,11 @@ try:
             sock.settimeout(1.0)
             conn, addr = sock.accept()
 
-            # ---- Read 4‑byte length prefix ----
+            # Read 4-byte length prefix
             length_bytes = recv_exact(conn, 4)
             msg_len = int.from_bytes(length_bytes, "big")
 
-            # ---- Read the full JSON payload ----
+            # Read the full JSON payload
             data = recv_exact(conn, msg_len).decode()
             conn.close()
 
@@ -65,8 +96,19 @@ try:
             if not polygons:
                 continue
 
-            # Plot
-            Plot.plot_data(polygons)
+            # Ensure all polygons are closed by repeating the first point at the end if needed
+            for polygon in polygons:
+                points = polygon["points"]
+                if points[0] != points[-1]:
+                    polygon["points"].append(points[0])
+
+            # Launch the plot in a separate thread so the server keeps running while the 3D window is open
+            plot_thread = threading.Thread(
+                target=handle_plot,
+                args=(polygons,),
+                daemon=True
+            )
+            plot_thread.start()
             print("Data plotted.")
 
         except socket.timeout:
@@ -79,9 +121,5 @@ finally:
     print("Server stopped.")
 
 
-#TODO Add dynamic z position depending on bottom
-#TODO Add option to Save 3d file in the plotter 
-#TODO ADD example file
-#TODO Add proper legend
-#TODO Not closing every time
-#TODO Add Requirement, Ignore and Readme files
+# TODO: Add proper legend
+# TODO: Add Requirements, .gitignore and README files

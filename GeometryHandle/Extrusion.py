@@ -1,10 +1,13 @@
 import numpy as np
-import Triangulation as tri
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
+try:
+    import GeometryHandle.Triangulation as tri
+except ModuleNotFoundError:
+    import Triangulation as tri
 
-def extrude_polygon_points(points: list = [], height: float = 0.0, z_position: float = 0.0):
+def extrude_polygon_points(points: list = [], height: float = 0.0, z_position: float = 0.0, tolerance: float = 0.01, tolerance_col: float = 0.001):
     """
     Generate 3 list of array representing the vertices of the bottom, top and lateral surface.
     
@@ -13,7 +16,9 @@ def extrude_polygon_points(points: list = [], height: float = 0.0, z_position: f
             The polygon can be concave. Assume the points list is simplified.
         height (float): extrusion height along the z-axis.
         z_position (float): starting z coordinate of the extrusion.
-    
+        tolerance (float): minimum x or y distance between consecutive points to consider them distinct.
+        tolerance_col (float): minimum tolerance for the cross product to consider points as non-collinear.
+
     Returns:
         bottom_points (list): List of (x, y, z) points at z_position.
         top_points (list): List of (x, y, z) points at z_position + height.
@@ -103,8 +108,8 @@ if __name__ == '__main__':
     # ==========================================
     height = 5
     z_position = 0
-    tolerance = 0.01
-    tolerance_col = 0.001
+    tol = 0.01
+    tol_col = 0.001
     
     output_points_array = []
     output_triangle_array = []
@@ -116,7 +121,9 @@ if __name__ == '__main__':
         # By extruding the 2D shape
         extruded_points_list = extrude_polygon_points(points=points, 
                                                       height=height, 
-                                                      z_position=z_position)
+                                                      z_position=z_position,
+                                                      tolerance=tol,
+                                                      tolerance_col=tol_col)
         for idx in range(3):
             output_points_array.append(extruded_points_list[idx][0])
             output_triangle_array.append(extruded_points_list[idx][1])

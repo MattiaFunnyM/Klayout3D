@@ -79,3 +79,9 @@ finally:
     print("Server stopped.")
 
 
+#TODO Add dynamic z position depending on bottom
+#TODO Add option to Save 3d file in the plotter 
+#TODO ADD example file
+#TODO Add proper legend
+#TODO Not closing every time
+#TODO Add Requirement, Ignore and Readme files

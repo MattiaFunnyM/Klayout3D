@@ -2,6 +2,7 @@ import sys
 import json 
 import numpy as np
 import pyvista as pv
+import GeometryHandle.Overlap as ovp
 import GeometryHandle.Extrusion as ext
 
 from PyQt5.QtCore import Qt
@@ -57,44 +58,51 @@ def polygons_extrusion_zoomed(actors: list = [], plotter: pv.plotter = None, pol
         color = info["color"]
         polygon_points = polygon["points"]
         tolerance = tech["tolerance"]
-        tolerance_col = tech["tolerance_col"]
-
-        # Apply Z scaling
+        max_distance = tech["max_distance"]
         height = info["height"] * z_zoom
-        z_position = info["z_position"] * z_zoom
+        z_position = info["z_position"] 
 
-        # Extrude the polygon based on the information collected
-        bot, top, lat = ext.extrude_polygon_points(
-            points=polygon_points,
-            height=height,
-            z_position=z_position,
-            tolerance=tolerance,
-            tolerance_col=tolerance_col
-        )
+        # Resolve z_position 
+        if isinstance(z_position, list):
+            #  If it's a list we need to differentiate differnt sub_regions
+            sub_regions = ovp.polygon_overlap(
+                polygon_points=polygon_points,
+                ref_layer_keys=z_position,
+                all_polygons=polygons,
+                z_zoom=z_zoom
+            )
+        else:
+            # If it's a float we can just assigne the z_bottom value
+            sub_regions = [{"points": [polygon_points], "z_bottom": z_position * z_zoom}]
 
-        # Create the mesh for all the faces extruded
-        for face in [bot, top, lat]:
-            
-            # Initialize the face
-            points = np.array(face[0])
-            triangles_indexes = face[1]
-            faces = []
+        for region in sub_regions:
+            for region_points in region["points"]:
+                z_position = region["z_bottom"]
 
-            # Fill the face array
-            for triangle_idx in triangles_indexes:
-                faces.extend([3, triangle_idx[0], triangle_idx[1], triangle_idx[2]])
-            faces = np.array(faces)
+                bot, top, lat = ext.extrude_polygon_points(
+                    points=region_points,
+                    height=height,
+                    z_position=z_position,
+                    tolerance=tolerance,
+                    max_distance=max_distance
+                )
 
-            # Add the mesh obtained
-            mesh = pv.PolyData(points, faces)
-          
-            
-            if no_actors:
-                actor = plotter.add_mesh(mesh, color=color, opacity=alpha, show_edges=False)
-                actors.append(actor)
-            else:
-                actors[actor_idx].GetMapper().SetInputData(mesh)
-                actor_idx += 1
+                for face in [bot, top, lat]:
+                    points = np.array(face[0])
+                    triangles_indexes = face[1]
+                    faces = []
+                    for triangle_idx in triangles_indexes:
+                        faces.extend([3, triangle_idx[0], triangle_idx[1], triangle_idx[2]])
+                    faces = np.array(faces)
+
+                    mesh = pv.PolyData(points, faces)
+
+                    if no_actors:
+                        actor = plotter.add_mesh(mesh, color=color, opacity=alpha, show_edges=False)
+                        actors.append(actor)
+                    else:
+                        actors[actor_idx].GetMapper().SetInputData(mesh)
+                        actor_idx += 1
 
     return actors
 

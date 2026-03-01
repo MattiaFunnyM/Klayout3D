@@ -1,6 +1,6 @@
 import sys
 import json
-import Plot
+import GeometryHandle.Plot as Plot
 import socket
 import threading
 

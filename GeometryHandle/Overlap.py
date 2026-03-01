@@ -4,7 +4,7 @@ from shapely.ops import unary_union
 from shapely.geometry import Polygon as ShapelyPolygon
 
 # Open the Technology File
-with open("TechnologyExample.json", "r") as f:
+with open("Files/TechnologyExample.json", "r") as f:
     tech = json.load(f)
 
 # Take the information of the colors

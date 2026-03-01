@@ -23,7 +23,7 @@ from PyQt5.QtWidgets import (
 )
 
 # Open the Technology File
-with open("TechnologyExample.json", "r") as f:
+with open("Files/TechnologyExample.json", "r") as f:
     tech = json.load(f)
 
 # Take the information of the colors

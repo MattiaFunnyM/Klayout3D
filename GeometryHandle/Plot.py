@@ -21,8 +21,11 @@ from PyQt5.QtWidgets import (
     QFrame
 )
 
-# Open the Technology File
-with open("Example/TechnologyExample.json", "r") as f:
+# Open the Technology File using an absolute path
+import os
+base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+tech_file_path = os.path.join(base_dir, "Example", "TechnologyExample.json")
+with open(tech_file_path, "r") as f:
     tech = json.load(f)
 
 # Take the information of the colors

@@ -1,10 +1,15 @@
-import json 
+import os
+import json
 import shapely
-from shapely.ops import unary_union
 from shapely.geometry import Polygon as ShapelyPolygon
 
+
+# Get the absolute path to TechnologyExample.json relative to this file
+base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+tech_file_path = os.path.join(base_dir, "Example", "TechnologyExample.json")
+
 # Open the Technology File
-with open("Example/TechnologyExample.json", "r") as f:
+with open(tech_file_path, "r") as f:
     tech = json.load(f)
 
 # Take the information of the colors

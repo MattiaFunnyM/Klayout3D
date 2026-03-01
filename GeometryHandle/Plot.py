@@ -145,7 +145,7 @@ def plot_data(polygons: list = []):
 
     # Initialization of the PyVista Qt Interactor
     plotter = QtInteractor(central_widget)
-    plotter.set_background("#1e1e2e")
+    plotter.set_background("#dedee7")
     left_layout.addWidget(plotter.interactor, stretch=1)
 
     # Creation of the Slider Panel

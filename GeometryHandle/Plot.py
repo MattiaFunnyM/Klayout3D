@@ -1,6 +1,5 @@
 import sys
 import json 
-import trimesh
 import numpy as np
 import pyvista as pv
 import GeometryHandle.Overlap as ovp
@@ -23,7 +22,7 @@ from PyQt5.QtWidgets import (
 )
 
 # Open the Technology File
-with open("Files/TechnologyExample.json", "r") as f:
+with open("Example/TechnologyExample.json", "r") as f:
     tech = json.load(f)
 
 # Take the information of the colors

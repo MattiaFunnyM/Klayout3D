@@ -120,6 +120,4 @@ finally:
     sock.close()
     print("Server stopped.")
 
-
-# TODO: Add proper legend
 # TODO: Add Requirements, .gitignore and README files

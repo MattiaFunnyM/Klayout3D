@@ -1,5 +1,6 @@
 import sys
 import json 
+import trimesh
 import numpy as np
 import pyvista as pv
 import GeometryHandle.Overlap as ovp
@@ -13,6 +14,8 @@ from PyQt5.QtWidgets import (
     QMainWindow, 
     QVBoxLayout, 
     QHBoxLayout, 
+    QPushButton, 
+    QFileDialog,
     QWidget,
     QSlider, 
     QLabel, 
@@ -119,7 +122,7 @@ def plot_data(polygons: list = []):
 
     app = QApplication.instance() or QApplication(sys.argv)
 
-    # Initialization of the Main Window 
+    # Initialization of the Main Window
     window = QMainWindow()
     window.setWindowTitle("3D Layer Viewer")
     window.resize(1200, 700)
@@ -136,7 +139,7 @@ def plot_data(polygons: list = []):
     plotter.set_background("#1e1e2e")
     main_layout.addWidget(plotter.interactor, stretch=1)
 
-    # Creation of the Slider Panel ---
+    # Creation of the Slider Panel
     panel = QFrame()
     panel.setStyleSheet("""
         QFrame {
@@ -156,9 +159,9 @@ def plot_data(polygons: list = []):
 
     # Slider
     slider = QSlider(Qt.Horizontal)
-    slider.setMinimum(25)   
-    slider.setMaximum(1000)  
-    slider.setValue(100)    
+    slider.setMinimum(25)
+    slider.setMaximum(1000)
+    slider.setValue(100)
     slider.setTickInterval(25)
     slider.setTickPosition(QSlider.TicksBelow)
     slider.setStyleSheet("""
@@ -189,11 +192,32 @@ def plot_data(polygons: list = []):
     value_label.setAlignment(Qt.AlignCenter)
     panel_layout.addWidget(value_label)
 
+    # Save button
+    save_button = QPushButton("⬇ Export GLB")
+    save_button.setFont(QFont("Segoe UI", 10))
+    save_button.setStyleSheet("""
+        QPushButton {
+            background-color: #313244;
+            color: #cdd6f4;
+            border: 1px solid #45475a;
+            border-radius: 6px;
+            padding: 4px 14px;
+        }
+        QPushButton:hover {
+            background-color: #45475a;
+        }
+        QPushButton:pressed {
+            background-color: #89b4fa;
+            color: #1e1e2e;
+        }
+    """)
+    panel_layout.addWidget(save_button)
+
     main_layout.addWidget(panel)
 
-    ####################
-    # DRAW POLYGONS PART #
-    ####################
+    ########################
+    # DRAW POLYGONS PART   #
+    ########################
     actors = []
 
     def on_slider_change(raw_value):
@@ -208,7 +232,60 @@ def plot_data(polygons: list = []):
         )
         plotter.render()
 
+    def on_save():
+        """
+        Open a file dialog and export the current 3D scene as a GLB file.
+        GLB is the binary variant of GLTF, widely supported by Blender and
+        other 3D tools. Each actor is exported as a separate mesh preserving
+        colors and geometry.
+        """
+        # Open a save dialog filtered to GLB files
+        file_path, _ = QFileDialog.getSaveFileName(
+            window,
+            "Export 3D Scene",
+            "scene.glb",
+            "GLTF Binary (*.glb);;All Files (*)"
+        )
+        if not file_path:
+            # User cancelled the dialog
+            return
+
+        # Collect all meshes from active actors and convert to trimesh geometries
+        scene = trimesh.Scene()
+        for idx, actor in enumerate(actors):
+            vtk_mesh = actor.GetMapper().GetInput()
+            if vtk_mesh is None:
+                continue
+
+            # Extract vertices and faces from the VTK mesh
+            wrapped = pv.wrap(vtk_mesh)
+            vertices = np.array(wrapped.points)
+            faces = wrapped.faces.reshape(-1, 4)[:, 1:]  # drop the leading face-size column
+
+            # Recover the actor color and opacity
+            vtk_property = actor.GetProperty()
+            r, g, b = vtk_property.GetColor()
+            alpha = vtk_property.GetOpacity()
+            rgba = [int(r * 255), int(g * 255), int(b * 255), int(alpha * 255)]
+
+            # Build the trimesh object with its material color
+            mesh = trimesh.Trimesh(
+                vertices=vertices,
+                faces=faces,
+                process=False
+            )
+            mesh.visual = trimesh.visual.ColorVisuals(
+                mesh=mesh,
+                vertex_colors=rgba
+            )
+
+            scene.add_geometry(mesh, node_name=f"layer_{idx}")
+
+        # Export the full scene as GLB
+        scene.export(file_path)
+
     slider.valueChanged.connect(on_slider_change)
+    save_button.clicked.connect(on_save)
 
     # Initial render
     on_slider_change(100)
